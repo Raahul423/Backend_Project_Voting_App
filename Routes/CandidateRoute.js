@@ -1,80 +1,132 @@
-const express = require('express');
+const express = require("express");
 const router = express();
-const bodyparser = require('body-parser');
-router.use(bodyparser.json())
-const Candidate = require('../Module/Candidate')
-const {jwtauth} = require('../jwt');
-const User = require('../Module/UserSchema');
+const bodyparser = require("body-parser");
+router.use(bodyparser.json());
+const Candidate = require("../Module/Candidate");
+const { jwtauth } = require("../jwt");
+const User = require("../Module/UserSchema");
 
-
-const checkadmin = async(userId)=>{
-    try {
-         const user = await User.findById(userId);
-    if(user.role === "admin"){
-        return true
+const checkadmin = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    if (user.role === "admin") {
+      return true;
     }
-    } catch (error) {
-        return false
+  } catch (error) {
+    return false;
+  }
+};
+
+router.post("/", jwtauth, async (req, res) => {
+  try {
+    if (!(await checkadmin(req.Userpayload.id))) {
+      return res.status(403).json({ message: "User Have not Admin role" });
     }
-   
-}
-
-
-
-router.post('/',jwtauth,async(req,res)=>{
-    try {
-        if(!await checkadmin(req.Userpayload.id)){
-            return res.status(403).json({message:"User Have not Admin role"})
-        }
-        const {adhaar}=req.body
-        const checkingcandidate = await Candidate.findOne({adhaar:adhaar})
-        if(checkingcandidate){
-            return res.status(401).json({message:"User already exist"});
-        }
-        const candidatedata = new Candidate(req.body)// Take Information from user 
-         const response = await candidatedata.save();
-        console.log("Data received Sucessfully");
-        res.status(200).json(response);
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({message:"Internal Server Error"})
+    const { adhaar } = req.body;
+    const checkingcandidate = await Candidate.findOne({ adhaar: adhaar });
+    if (checkingcandidate) {
+      return res.status(401).json({ message: "User already exist" });
     }
+    const candidatedata = new Candidate(req.body); // Take Information from user
+    const response = await candidatedata.save();
+    console.log("Data received Sucessfully");
+    res.status(200).json(response);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
+router.put("/:candidateID", jwtauth, async (req, res) => {
+  try {
+    if (!(await checkadmin(req.Userpayload.id))) {
+      return res.status(403).json({ message: "User Have not Admin role" });
+    }
+    const candidateid = req.params.candidateID;
+    const candidatedata = req.body;
 
-router.put('/:candidateID',jwtauth,async(req,res)=>{
+    const updatecandidate = await Candidate.findByIdAndUpdate(
+      candidateid,
+      candidatedata,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+    console.log("Upadate Sucessfull");
+    res.status(200).json(updatecandidate);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+router.delete("/:candidateID", jwtauth, async (req, res) => {
+  try {
+    if (!(await checkadmin(req.Userpayload.id))) {
+      return res.status(403).json({ message: "User Have not Admin role" });
+    }
+    const candidateid = req.params.candidateID;
+    const deletecandidate = await Candidate.findByIdAndDelete(candidateid);
+    console.log("Candidate sucessfully deleted");
+    res.status(200).json({ message: "Candidate deleted sucessfully" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal" });
+  }
+});
+
+router.post("/vote/:candidateID", jwtauth, async (req, res) => {
+  try {
+    const candidateid = req.params.candidateID;
+    const userid = req.Userpayload.id;
+
+    const candidate = await Candidate.findById(candidateid);
+    if (!candidate) {
+      return res.status(403).json({ message: "candidate not found" });
+    }
+
+    candidate.votes.push({ user: userid });
+    candidate.votecount++;
+    await candidate.save();
+
+    const user = await User.findById(userid);
+    if (!user) {
+      return res.status(403).json({ message: "User not found" });
+    }
+    
+    if (user.role == "admin") {
+      return res.status(401).json({ message: "Admin not allow to vote" });
+    }
+
+    if (user.isvoted == true) {
+      return res.status(401).json({ message: "You already voted" });
+    }
+
+    user.isvoted = true;
+    await user.save();
+     res.status(200).json({message:"vote record sucessfully"})
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Internal" });
+  }
+
+})
+
+router.get('/vote/count',async(req,res)=>{
     try {
-         if(!await checkadmin(req.Userpayload.id)){
-            return res.status(403).json({message:"User Have not Admin role"})
-        }
-        const candidateid = req.params.candidateID;
-        const candidatedata = req.body;
-
-        const updatecandidate = await Candidate.findByIdAndUpdate(candidateid,candidatedata,{
-            new:true,
-            runValidators:true
+        const votecount = await Candidate.find().sort('desc')
+        const showdata = votecount.map((data)=>{
+            return{
+                party:data.party,
+                count:data.votecount
+            }
         })
-        console.log("Upadate Sucessfull");
-        res.status(200).json(updatecandidate);
+        res.status(200).json(showdata);
     } catch (error) {
-        console.log(error);
-        res.status(500).json({message:"Internal Server Error"})
+         console.log(error);
+    res.status(500).json({ message: "Internal" });
     }
-})
-
-router.delete('/:candidateID',jwtauth,async(req,res)=>{
-    try {
-         if(!await checkadmin(req.Userpayload.id)){
-            return res.status(403).json({message:"User Have not Admin role"})
-        }
-        const candidateid = req.params.candidateID;
-        const deletecandidate = await Candidate.findByIdAndDelete(candidateid);
-        console.log("Candidate sucessfully deleted");
-        res.status(200).json({message:"Candidate deleted sucessfully"});
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({message:"Internal"})
-    }
-})
+  })
 
 module.exports = router;

@@ -39,7 +39,7 @@ router.post('/login',async(req,res)=>{
             id:user.id
         }
         const token = generatetoken(payload);
-    res.status(200).json(user)
+    res.status(200).json({user:user,token:token});
     } catch (error) {
         console.log(error);
         res.status(500).json({message:"Internal Server Error"})
