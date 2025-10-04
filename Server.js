@@ -6,6 +6,9 @@ const UserRoute = require('./Routes/UserRoute')
 const CandidateRoute = require('./Routes/CandidateRoute')
 
 
+app.get('/',(req,res)=>{
+    res.send("<h1>Welcome to Voting App</h1>")
+})
 
 app.use('/user',UserRoute)
 app.use('/candidate',CandidateRoute)
